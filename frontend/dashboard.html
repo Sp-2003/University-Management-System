@@ -1,0 +1,324 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UMS | Dashboard</title>
+    <link rel="stylesheet" href="./assets/css/styles.css" />
+  </head>
+  <body>
+    <nav>
+      <span id="who"></span>
+      <button id="logout">Logout</button>
+    </nav>
+
+    <main class="grid">
+      <!-- Students -->
+      <section>
+        <h2>Students</h2>
+        <form id="studentForm">
+          <input placeholder="Reg No" id="sRegNo" required />
+          <input placeholder="Name" id="sName" required />
+          <input placeholder="Email" id="sEmail" type="email" required />
+          <input placeholder="Department" id="sDept" required />
+          <input placeholder="Semester" id="sSem" type="number" min="1" max="8" value="1" />
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="studentSubmit">Add</button>
+            <button id="studentCancel" type="button" style="display:none;">Cancel Edit</button>
+          </div>
+        </form>
+        <input id="sSearch" placeholder="Search students by name/regNo/department..." />
+        <ul id="students"></ul>
+      </section>
+
+      <!-- Courses -->
+      <section>
+        <h2>Courses</h2>
+        <form id="courseForm">
+          <input placeholder="Code" id="cCode" required />
+          <input placeholder="Title" id="cTitle" required />
+          <input placeholder="Credits" id="cCredits" type="number" value="3" />
+          <input placeholder="Department" id="cDept" required />
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="courseSubmit">Add</button>
+            <button id="courseCancel" type="button" style="display:none;">Cancel Edit</button>
+          </div>
+        </form>
+        <input id="cSearch" placeholder="Search courses by title/code/department..." />
+        <ul id="courses"></ul>
+      </section>
+
+      <!-- Enrollments -->
+      <section>
+        <h2>Enrollments</h2>
+        <form id="enrollForm">
+          <select id="eStudent" required></select>
+          <select id="eCourse" required></select>
+          <button>Enroll</button>
+        </form>
+        <ul id="enrollments"></ul>
+      </section>
+
+      <!-- Notices -->
+      <section>
+        <h2>Notice Board</h2>
+        <form id="noticeForm">
+          <input id="nTitle" placeholder="Notice title" required />
+          <textarea id="nBody" placeholder="Notice body..." rows="3" required></textarea>
+          <select id="nAudience">
+            <option value="all">All</option>
+            <option value="students">Students</option>
+            <option value="teachers">Teachers</option>
+          </select>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="noticeSubmit">Publish</button>
+            <button id="noticeCancel" type="button" style="display:none;">Cancel Edit</button>
+          </div>
+        </form>
+        <ul id="notices"></ul>
+      </section>
+    </main>
+
+    <script src="./assets/js/api.js"></script>
+    <script>
+      // --- Auth guard ---
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = localStorage.getItem('token');
+      if (!token) window.location.href = './index.html';
+      document.getElementById('who').textContent = `Logged in: ${user.name} (${user.role})`;
+      document.getElementById('logout').onclick = () => { localStorage.clear(); location.href='./index.html' };
+
+      // --- State ---
+      let STUDENTS = [];
+      let COURSES  = [];
+      let ENROLLS  = [];
+      let NOTICES  = [];
+
+      let editingStudentId = null;
+      let editingCourseId  = null;
+      let editingNoticeId  = null;
+
+      function byId(id){ return document.getElementById(id); }
+
+      // ---------- Renderers ----------
+      function renderStudents(list){
+        const el = byId('students'); el.innerHTML = '';
+        list.forEach(s=>{
+          const li = document.createElement('li');
+          li.textContent = `${s._id} | ${s.name} (${s.regNo}) — ${s.department} [Sem ${s.semester}]`;
+          const edit = document.createElement('button'); edit.textContent='Edit';
+          edit.onclick = ()=>{
+            editingStudentId = s._id;
+            byId('sRegNo').value = s.regNo;
+            byId('sName').value = s.name;
+            byId('sEmail').value = s.email;
+            byId('sDept').value = s.department;
+            byId('sSem').value  = s.semester;
+            byId('studentSubmit').textContent = 'Save';
+            byId('studentCancel').style.display = 'inline-block';
+          };
+          const del = document.createElement('button'); del.textContent='Delete';
+          del.onclick = async ()=>{ await api(`/students/${s._id}`,'DELETE'); refresh(); };
+          const wrap = document.createElement('span'); wrap.appendChild(edit); wrap.appendChild(del);
+          li.appendChild(wrap); el.appendChild(li);
+        });
+      }
+
+      function renderCourses(list){
+        const el = byId('courses'); el.innerHTML = '';
+        list.forEach(c=>{
+          const li = document.createElement('li');
+          li.textContent = `${c._id} | ${c.title} [${c.code}] — ${c.department} (${c.credits} cr)`;
+          const edit = document.createElement('button'); edit.textContent='Edit';
+          edit.onclick = ()=>{
+            editingCourseId = c._id;
+            byId('cCode').value    = c.code;
+            byId('cTitle').value   = c.title;
+            byId('cCredits').value = c.credits;
+            byId('cDept').value    = c.department;
+            byId('courseSubmit').textContent = 'Save';
+            byId('courseCancel').style.display = 'inline-block';
+          };
+          const del = document.createElement('button'); del.textContent='Delete';
+          del.onclick = async ()=>{ await api(`/courses/${c._id}`,'DELETE'); refresh(); };
+          const wrap = document.createElement('span'); wrap.appendChild(edit); wrap.appendChild(del);
+          li.appendChild(wrap); el.appendChild(li);
+        });
+      }
+
+      function renderEnrollments(list){
+        const el = byId('enrollments'); el.innerHTML = '';
+        list.forEach(e=>{
+          const li = document.createElement('li');
+          const label = document.createElement('span');
+          label.textContent = `${e.student?.name} → ${e.course?.title} (${e.grade ?? '-'})`;
+          const sel = document.createElement('select');
+          ['-','A','B','C','D','E','F'].forEach(g=>{
+            const opt = document.createElement('option');
+            opt.value = g === '-' ? '' : g;
+            opt.textContent = g;
+            if ((e.grade ?? '') === opt.value) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          const save = document.createElement('button'); save.textContent='Update Grade';
+          save.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'PUT',{ grade: sel.value || null }); refresh(); };
+          const del = document.createElement('button'); del.textContent='Delete';
+          del.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'DELETE'); refresh(); };
+          li.appendChild(label); li.appendChild(sel); li.appendChild(save); li.appendChild(del);
+          el.appendChild(li);
+        });
+      }
+
+      function renderNotices(list){
+        const el = byId('notices'); el.innerHTML = '';
+        list.forEach(n=>{
+          const li = document.createElement('li');
+          const date = new Date(n.publishedAt || n.createdAt).toLocaleString();
+          const label = document.createElement('div');
+          label.innerHTML = `<strong>${n.title}</strong> &nbsp; <em>[${n.audience}]</em><br>${n.body}<br><small>${date}</small>`;
+          const edit = document.createElement('button'); edit.textContent='Edit';
+          edit.onclick = ()=>{
+            editingNoticeId = n._id;
+            byId('nTitle').value = n.title;
+            byId('nBody').value  = n.body;
+            byId('nAudience').value = n.audience || 'all';
+            byId('noticeSubmit').textContent = 'Save';
+            byId('noticeCancel').style.display = 'inline-block';
+          };
+          const del = document.createElement('button'); del.textContent='Delete';
+          del.onclick = async ()=>{ await api(`/notices/${n._id}`,'DELETE'); refresh(); };
+          const actions = document.createElement('span'); actions.appendChild(edit); actions.appendChild(del);
+          li.appendChild(label); li.appendChild(actions);
+          el.appendChild(li);
+        });
+      }
+
+      function populateEnrollmentSelects(){
+        const sSel = byId('eStudent');
+        const cSel = byId('eCourse');
+        sSel.innerHTML = '<option value="">Select Student</option>' +
+          STUDENTS.map(s => `<option value="${s._id}">${s.name} (${s.regNo})</option>`).join('');
+        cSel.innerHTML = '<option value="">Select Course</option>' +
+          COURSES.map(c => `<option value="${c._id}">${c.title} [${c.code}]</option>`).join('');
+      }
+
+      // ---------- Filters ----------
+      function applyStudentFilter(){
+        const q = byId('sSearch').value.trim().toLowerCase();
+        const data = !q ? STUDENTS : STUDENTS.filter(s =>
+          (s.name||'').toLowerCase().includes(q) ||
+          (s.regNo||'').toLowerCase().includes(q) ||
+          (s.department||'').toLowerCase().includes(q)
+        );
+        renderStudents(data);
+      }
+      function applyCourseFilter(){
+        const q = byId('cSearch').value.trim().toLowerCase();
+        const data = !q ? COURSES : COURSES.filter(c =>
+          (c.title||'').toLowerCase().includes(q) ||
+          (c.code||'').toLowerCase().includes(q) ||
+          (c.department||'').toLowerCase().includes(q)
+        );
+        renderCourses(data);
+      }
+      byId('sSearch').addEventListener('input', applyStudentFilter);
+      byId('cSearch').addEventListener('input', applyCourseFilter);
+
+      // ---------- Forms ----------
+      // Students
+      byId('studentForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const payload = {
+          regNo: byId('sRegNo').value.trim(),
+          name:  byId('sName').value.trim(),
+          email: byId('sEmail').value.trim(),
+          department: byId('sDept').value.trim(),
+          semester: Number(byId('sSem').value)
+        };
+        if (editingStudentId) await api(`/students/${editingStudentId}`,'PUT',payload);
+        else await api('/students','POST',payload);
+        clearStudentEdit(); refresh();
+      });
+      function clearStudentEdit(){
+        editingStudentId = null;
+        byId('studentSubmit').textContent = 'Add';
+        byId('studentCancel').style.display = 'none';
+        byId('studentForm').reset();
+      }
+      byId('studentCancel').onclick = clearStudentEdit;
+
+      // Courses
+      byId('courseForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const payload = {
+          code: byId('cCode').value.trim(),
+          title: byId('cTitle').value.trim(),
+          credits: Number(byId('cCredits').value),
+          department: byId('cDept').value.trim()
+        };
+        if (editingCourseId) await api(`/courses/${editingCourseId}`,'PUT',payload);
+        else await api('/courses','POST',payload);
+        clearCourseEdit(); refresh();
+      });
+      function clearCourseEdit(){
+        editingCourseId = null;
+        byId('courseSubmit').textContent = 'Add';
+        byId('courseCancel').style.display = 'none';
+        byId('courseForm').reset();
+      }
+      byId('courseCancel').onclick = clearCourseEdit;
+
+      // Enroll
+      byId('enrollForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const sid = byId('eStudent').value.trim();
+        const cid = byId('eCourse').value.trim();
+        const isObjectId = /^[a-fA-F0-9]{24}$/;
+        if (!sid || !cid) return alert('Pick both student and course');
+        if (!isObjectId.test(sid) || !isObjectId.test(cid)) return alert('Invalid IDs; refresh and try again.');
+        await api('/enrollments','POST',{ student: sid, course: cid });
+        e.target.reset(); refresh();
+      });
+
+      // Notices
+      byId('noticeForm').addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const payload = {
+          title: byId('nTitle').value.trim(),
+          body: byId('nBody').value.trim(),
+          audience: byId('nAudience').value
+        };
+        if (!payload.title || !payload.body) return alert('Title and body are required');
+        if (editingNoticeId) await api(`/notices/${editingNoticeId}`,'PUT',payload);
+        else await api('/notices','POST',payload);
+        clearNoticeEdit(); refresh();
+      });
+      function clearNoticeEdit(){
+        editingNoticeId = null;
+        byId('noticeSubmit').textContent = 'Publish';
+        byId('noticeCancel').style.display = 'none';
+        byId('noticeForm').reset();
+      }
+      byId('noticeCancel').onclick = clearNoticeEdit;
+
+      // ---------- Refresh ----------
+      async function refresh(){
+        const [students, courses, enrollments, notices] = await Promise.all([
+          api('/students'),
+          api('/courses'),
+          api('/enrollments'),
+          api('/notices')
+        ]);
+        STUDENTS = students; COURSES = courses; ENROLLS = enrollments; NOTICES = notices;
+        applyStudentFilter();
+        applyCourseFilter();
+        renderEnrollments(ENROLLS);
+        renderNotices(NOTICES);
+        populateEnrollmentSelects();
+      }
+
+      // Init
+      refresh();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import Student from '../models/Student.js';
+import { requireAuth } from '../middleware/auth.js';
+const router = Router();
+router.use(requireAuth);
+router.get('/', async (req,res)=>{ res.json(await Student.find().sort({createdAt:-1}).limit(100)); });
+router.post('/', async (req,res)=>{ try { res.json(await Student.create(req.body)); } catch(e){res.status(400).json({error:e.message});}});
+router.put('/:id', async (req,res)=>{ try { res.json(await Student.findByIdAndUpdate(req.params.id, req.body, {new:true})); } catch(e){res.status(400).json({error:e.message});}});
+router.delete('/:id', async (req,res)=>{ await Student.findByIdAndDelete(req.params.id); res.json({ok:true}); });
+export default router;

@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import Enrollment from '../models/Enrollment.js';
+import { requireAuth } from '../middleware/auth.js';
+const router = Router();
+router.use(requireAuth);
+router.get('/', async (req,res)=>{ res.json(await Enrollment.find().populate('student course')); });
+router.post('/', async (req,res)=>{ try { res.json(await Enrollment.create(req.body)); } catch(e){res.status(400).json({error:e.message});}});
+router.put('/:id', async (req,res)=>{ try { res.json(await Enrollment.findByIdAndUpdate(req.params.id, req.body, {new:true})); } catch(e){res.status(400).json({error:e.message});}});
+router.delete('/:id', async (req,res)=>{ await Enrollment.findByIdAndDelete(req.params.id); res.json({ok:true}); });
+export default router;

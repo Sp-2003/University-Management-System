@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UMS | Login</title>
+    <link rel="stylesheet" href="./assets/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>University Management System</h1>
+      <form id="loginForm">
+        <label>Email <input type="email" id="email" required /></label>
+        <label>Password <input type="password" id="password" required /></label>
+        <button type="submit">Login</button>
+      </form>
+      <p id="msg"></p>
+    </div>
+    <script src="./assets/js/api.js"></script>
+    <script>
+      const form = document.getElementById('loginForm');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        try {
+          const data = await api('/auth/login', 'POST', { email, password });
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          window.location.href = './dashboard.html';
+        } catch (err) {
+          document.getElementById('msg').textContent = err.message || 'Login failed';
+        }
+      });
+    </script>
+  </body>
+</html>
