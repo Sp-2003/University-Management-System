@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -9,6 +11,8 @@ import studentRoutes from './routes/students.js';
 import courseRoutes from './routes/courses.js';
 import enrollmentRoutes from './routes/enrollments.js';
 import noticeRoutes from './routes/notices.js';
+import adminRoutes from './routes/admin.js';
+
 
 dotenv.config();
 const app = express();
@@ -28,7 +32,7 @@ app.use('/api/students', studentRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/notices', noticeRoutes);
-
+app.use('/api/admin', adminRoutes);
 // 404 MUST be last
 app.use((req,res)=>res.status(404).json({error:'Not Found'}));
 

@@ -5,31 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>UMS | Login</title>
     <link rel="stylesheet" href="./assets/css/styles.css" />
+    <style>
+      .card { max-width: 520px; margin: 2rem auto; padding: 1.25rem; background: #fff; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.06); }
+      .tabs { display:flex; gap:.5rem; margin-bottom:1rem }
+      .tabs button { padding:.5rem .9rem; border-radius:8px; border:1px solid #ddd; background:#f6f7fb; cursor:pointer }
+      .tabs button.active { background:#e8eeff; border-color:#b6c4ff; }
+      form { display:grid; gap:.6rem }
+      label { display:grid; gap:.25rem; font-weight:600; }
+      input, select, textarea, button { padding:.6rem .7rem; border:1px solid #ddd; border-radius:8px; }
+      button[type="submit"] { background:#3b82f6; color:#fff; border-color:#3b82f6; font-weight:700; cursor:pointer }
+      .hint { font-size:.9rem; color:#666; }
+      .ok { color:#0a7f2e } .err { color:#b00020 }
+      .sep { height:1px; background:#eee; margin:1rem 0 }
+    </style>
   </head>
   <body>
-    <div class="container">
+    <div class="card">
       <h1>University Management System</h1>
+
+      <div class="tabs">
+        <button id="tabLogin" class="active" type="button">Login</button>
+        <button id="tabSignup" type="button">Sign up</button>
+      </div>
+
+      <!-- LOGIN -->
       <form id="loginForm">
-        <label>Email <input type="email" id="email" required /></label>
-        <label>Password <input type="password" id="password" required /></label>
+        <label>Email
+          <input type="email" id="email" required />
+        </label>
+        <label>Password
+          <input type="password" id="password" required />
+        </label>
         <button type="submit">Login</button>
+        <div class="hint">Only <b>approved</b> accounts can login.</div>
+        <p id="msg" class=""></p>
       </form>
-      <p id="msg"></p>
+
+      <!-- SIGN UP (Admin approval required) -->
+      <form id="signupForm" style="display:none">
+        <label>Full Name
+          <input id="rName" required />
+        </label>
+        <label>Institutional ID <span class="hint">(Roll/Employee ID)</span>
+          <input id="rId" />
+        </label>
+        <label>Email
+          <input type="email" id="rEmail" required />
+        </label>
+        <label>Password
+          <input type="password" id="rPass" required />
+        </label>
+        <label>Role
+          <select id="rRole">
+            <option value="student">Student</option>
+            <option value="teacher">Teacher</option>
+          </select>
+        </label>
+        <button type="submit">Request Account</button>
+        <div class="hint">Your request goes to Admin. You’ll be able to login after approval.</div>
+        <p id="rmsg" class=""></p>
+      </form>
+
+      <div class="sep"></div>
+      <div class="hint">
+        If you're running locally, set API once in browser console:
+        <code>localStorage.setItem('API_BASE','http://127.0.0.1:4000/api')</code>
+      </div>
     </div>
+
     <script src="./assets/js/api.js"></script>
     <script>
-      const form = document.getElementById('loginForm');
-      form.addEventListener('submit', async (e) => {
+      // Tabs toggle
+      const tabLogin = document.getElementById('tabLogin');
+      const tabSignup = document.getElementById('tabSignup');
+      const loginForm = document.getElementById('loginForm');
+      const signupForm = document.getElementById('signupForm');
+      function show(tab){
+        if (tab === 'login') {
+          loginForm.style.display = '';
+          signupForm.style.display = 'none';
+          tabLogin.classList.add('active');
+          tabSignup.classList.remove('active');
+        } else {
+          loginForm.style.display = 'none';
+          signupForm.style.display = '';
+          tabLogin.classList.remove('active');
+          tabSignup.classList.add('active');
+        }
+      }
+      tabLogin.onclick = () => show('login');
+      tabSignup.onclick = () => show('signup');
+
+      // LOGIN
+      loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('email').value;
+        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
+        const msg = document.getElementById('msg');
+        msg.className = ''; msg.textContent = '';
         try {
           const data = await api('/auth/login', 'POST', { email, password });
           localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify(data.user));
           window.location.href = './dashboard.html';
         } catch (err) {
-          document.getElementById('msg').textContent = err.message || 'Login failed';
+          msg.className = 'err';
+          msg.textContent = err.message || 'Login failed';
+        }
+      });
+
+      // SIGN-UP (admin approval flow)
+      signupForm.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const payload = {
+          name: document.getElementById('rName').value.trim(),
+          institutionalId: document.getElementById('rId').value.trim(),
+          email: document.getElementById('rEmail').value.trim(),
+          password: document.getElementById('rPass').value,
+          requestedRole: document.getElementById('rRole').value
+        };
+        const rmsg = document.getElementById('rmsg');
+        rmsg.className = ''; rmsg.textContent = '';
+        try {
+          await api('/auth/register','POST', payload);
+          rmsg.className = 'ok';
+          rmsg.textContent = 'Registration submitted. Please wait for admin approval.';
+          signupForm.reset();
+          show('login');
+        } catch (err) {
+          rmsg.className = 'err';
+          rmsg.textContent = err.message || 'Registration failed';
         }
       });
     </script>

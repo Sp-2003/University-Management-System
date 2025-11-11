@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>UMS | Dashboard</title>
     <link rel="stylesheet" href="./assets/css/styles.css" />
+    <style>
+      .muted { color:#666; font-size:.9rem }
+      .tools { display:flex; gap:8px; margin-left:8px }
+      .hidden { display:none !important }
+    </style>
   </head>
   <body>
     <nav>
@@ -13,9 +18,18 @@
     </nav>
 
     <main class="grid">
-      <!-- Students -->
-      <section>
+      <!-- Admin-only: Pending Approvals -->
+      <section id="adminUsers" class="hidden">
+        <h2>Pending Approvals</h2>
+        <div class="muted">Approve or reject signup requests.</div>
+        <button id="refreshPending">Refresh</button>
+        <ul id="pendingList"></ul>
+      </section>
+
+      <!-- Students (Admin-only full CRUD; Teacher/Student read-only list) -->
+      <section id="secStudents">
         <h2>Students</h2>
+
         <form id="studentForm">
           <input placeholder="Reg No" id="sRegNo" required />
           <input placeholder="Name" id="sName" required />
@@ -27,13 +41,15 @@
             <button id="studentCancel" type="button" style="display:none;">Cancel Edit</button>
           </div>
         </form>
+
         <input id="sSearch" placeholder="Search students by name/regNo/department..." />
         <ul id="students"></ul>
       </section>
 
-      <!-- Courses -->
-      <section>
+      <!-- Courses (Admin+Teacher manage; Student read-only) -->
+      <section id="secCourses">
         <h2>Courses</h2>
+
         <form id="courseForm">
           <input placeholder="Code" id="cCode" required />
           <input placeholder="Title" id="cTitle" required />
@@ -44,12 +60,13 @@
             <button id="courseCancel" type="button" style="display:none;">Cancel Edit</button>
           </div>
         </form>
+
         <input id="cSearch" placeholder="Search courses by title/code/department..." />
         <ul id="courses"></ul>
       </section>
 
-      <!-- Enrollments -->
-      <section>
+      <!-- Enrollments (Admin+Teacher manage; Student read-only list) -->
+      <section id="secEnrollments">
         <h2>Enrollments</h2>
         <form id="enrollForm">
           <select id="eStudent" required></select>
@@ -59,8 +76,8 @@
         <ul id="enrollments"></ul>
       </section>
 
-      <!-- Notices -->
-      <section>
+      <!-- Notices (Admin+Teacher can publish; Student view only) -->
+      <section id="secNotices">
         <h2>Notice Board</h2>
         <form id="noticeForm">
           <input id="nTitle" placeholder="Notice title" required />
@@ -81,12 +98,40 @@
 
     <script src="./assets/js/api.js"></script>
     <script>
-      // --- Auth guard ---
+      // --- Auth guard & role flags ---
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const token = localStorage.getItem('token');
       if (!token) window.location.href = './index.html';
       document.getElementById('who').textContent = `Logged in: ${user.name} (${user.role})`;
       document.getElementById('logout').onclick = () => { localStorage.clear(); location.href='./index.html' };
+
+      const isAdmin = user.role === 'admin';
+      const isTeacher = user.role === 'teacher';
+      const isStudent = user.role === 'student';
+
+      // --- Show/hide sections based on role ---
+      // Admin approvals section
+      if (isAdmin) document.getElementById('adminUsers').classList.remove('hidden');
+
+      // Student management form only Admin can use (teachers/students see list only)
+      if (!isAdmin) {
+        document.getElementById('studentForm').classList.add('hidden');
+      }
+
+      // Course form allowed for Admin + Teacher
+      if (!(isAdmin || isTeacher)) {
+        document.getElementById('courseForm').classList.add('hidden');
+      }
+
+      // Enrollment form allowed for Admin + Teacher
+      if (!(isAdmin || isTeacher)) {
+        document.getElementById('enrollForm').classList.add('hidden');
+      }
+
+      // Notice form hidden for Students (view-only)
+      if (isStudent) {
+        document.getElementById('noticeForm').classList.add('hidden');
+      }
 
       // --- State ---
       let STUDENTS = [];
@@ -98,7 +143,7 @@
       let editingCourseId  = null;
       let editingNoticeId  = null;
 
-      function byId(id){ return document.getElementById(id); }
+      const byId = (id) => document.getElementById(id);
 
       // ---------- Renderers ----------
       function renderStudents(list){
@@ -106,21 +151,29 @@
         list.forEach(s=>{
           const li = document.createElement('li');
           li.textContent = `${s._id} | ${s.name} (${s.regNo}) — ${s.department} [Sem ${s.semester}]`;
-          const edit = document.createElement('button'); edit.textContent='Edit';
-          edit.onclick = ()=>{
-            editingStudentId = s._id;
-            byId('sRegNo').value = s.regNo;
-            byId('sName').value = s.name;
-            byId('sEmail').value = s.email;
-            byId('sDept').value = s.department;
-            byId('sSem').value  = s.semester;
-            byId('studentSubmit').textContent = 'Save';
-            byId('studentCancel').style.display = 'inline-block';
-          };
-          const del = document.createElement('button'); del.textContent='Delete';
-          del.onclick = async ()=>{ await api(`/students/${s._id}`,'DELETE'); refresh(); };
-          const wrap = document.createElement('span'); wrap.appendChild(edit); wrap.appendChild(del);
-          li.appendChild(wrap); el.appendChild(li);
+
+          const tools = document.createElement('span');
+          tools.className = 'tools';
+
+          if (isAdmin) {
+            const edit = document.createElement('button'); edit.textContent='Edit';
+            edit.onclick = ()=>{
+              editingStudentId = s._id;
+              byId('sRegNo').value = s.regNo;
+              byId('sName').value = s.name;
+              byId('sEmail').value = s.email;
+              byId('sDept').value = s.department;
+              byId('sSem').value  = s.semester;
+              byId('studentSubmit').textContent = 'Save';
+              byId('studentCancel').style.display = 'inline-block';
+            };
+            const del = document.createElement('button'); del.textContent='Delete';
+            del.onclick = async ()=>{ await api(`/students/${s._id}`,'DELETE'); refresh(); };
+            tools.appendChild(edit); tools.appendChild(del);
+          }
+
+          li.appendChild(tools);
+          el.appendChild(li);
         });
       }
 
@@ -129,20 +182,28 @@
         list.forEach(c=>{
           const li = document.createElement('li');
           li.textContent = `${c._id} | ${c.title} [${c.code}] — ${c.department} (${c.credits} cr)`;
-          const edit = document.createElement('button'); edit.textContent='Edit';
-          edit.onclick = ()=>{
-            editingCourseId = c._id;
-            byId('cCode').value    = c.code;
-            byId('cTitle').value   = c.title;
-            byId('cCredits').value = c.credits;
-            byId('cDept').value    = c.department;
-            byId('courseSubmit').textContent = 'Save';
-            byId('courseCancel').style.display = 'inline-block';
-          };
-          const del = document.createElement('button'); del.textContent='Delete';
-          del.onclick = async ()=>{ await api(`/courses/${c._id}`,'DELETE'); refresh(); };
-          const wrap = document.createElement('span'); wrap.appendChild(edit); wrap.appendChild(del);
-          li.appendChild(wrap); el.appendChild(li);
+
+          const tools = document.createElement('span');
+          tools.className = 'tools';
+
+          if (isAdmin || isTeacher) {
+            const edit = document.createElement('button'); edit.textContent='Edit';
+            edit.onclick = ()=>{
+              editingCourseId = c._id;
+              byId('cCode').value    = c.code;
+              byId('cTitle').value   = c.title;
+              byId('cCredits').value = c.credits;
+              byId('cDept').value    = c.department;
+              byId('courseSubmit').textContent = 'Save';
+              byId('courseCancel').style.display = 'inline-block';
+            };
+            const del = document.createElement('button'); del.textContent='Delete';
+            del.onclick = async ()=>{ await api(`/courses/${c._id}`,'DELETE'); refresh(); };
+            tools.appendChild(edit); tools.appendChild(del);
+          }
+
+          li.appendChild(tools);
+          el.appendChild(li);
         });
       }
 
@@ -152,43 +213,59 @@
           const li = document.createElement('li');
           const label = document.createElement('span');
           label.textContent = `${e.student?.name} → ${e.course?.title} (${e.grade ?? '-'})`;
-          const sel = document.createElement('select');
-          ['-','A','B','C','D','E','F'].forEach(g=>{
-            const opt = document.createElement('option');
-            opt.value = g === '-' ? '' : g;
-            opt.textContent = g;
-            if ((e.grade ?? '') === opt.value) opt.selected = true;
-            sel.appendChild(opt);
-          });
-          const save = document.createElement('button'); save.textContent='Update Grade';
-          save.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'PUT',{ grade: sel.value || null }); refresh(); };
-          const del = document.createElement('button'); del.textContent='Delete';
-          del.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'DELETE'); refresh(); };
-          li.appendChild(label); li.appendChild(sel); li.appendChild(save); li.appendChild(del);
+          li.appendChild(label);
+
+          if (isAdmin || isTeacher) {
+            const sel = document.createElement('select');
+            ['-','A','B','C','D','E','F'].forEach(g=>{
+              const opt = document.createElement('option');
+              opt.value = g === '-' ? '' : g;
+              opt.textContent = g;
+              if ((e.grade ?? '') === opt.value) opt.selected = true;
+              sel.appendChild(opt);
+            });
+            const save = document.createElement('button'); save.textContent='Update Grade';
+            save.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'PUT',{ grade: sel.value || null }); refresh(); };
+            const del = document.createElement('button'); del.textContent='Delete';
+            del.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'DELETE'); refresh(); };
+
+            li.appendChild(sel); li.appendChild(save); li.appendChild(del);
+          }
+
           el.appendChild(li);
         });
       }
 
       function renderNotices(list){
         const el = byId('notices'); el.innerHTML = '';
+        const canManageNotices = (isAdmin || isTeacher);
+
         list.forEach(n=>{
           const li = document.createElement('li');
           const date = new Date(n.publishedAt || n.createdAt).toLocaleString();
           const label = document.createElement('div');
-          label.innerHTML = `<strong>${n.title}</strong> &nbsp; <em>[${n.audience}]</em><br>${n.body}<br><small>${date}</small>`;
-          const edit = document.createElement('button'); edit.textContent='Edit';
-          edit.onclick = ()=>{
-            editingNoticeId = n._id;
-            byId('nTitle').value = n.title;
-            byId('nBody').value  = n.body;
-            byId('nAudience').value = n.audience || 'all';
-            byId('noticeSubmit').textContent = 'Save';
-            byId('noticeCancel').style.display = 'inline-block';
-          };
-          const del = document.createElement('button'); del.textContent='Delete';
-          del.onclick = async ()=>{ await api(`/notices/${n._id}`,'DELETE'); refresh(); };
-          const actions = document.createElement('span'); actions.appendChild(edit); actions.appendChild(del);
-          li.appendChild(label); li.appendChild(actions);
+          label.innerHTML = `<strong>${n.title}</strong> &nbsp; <em>[${n.audience}]</em><br>${n.body}<br><small class="muted">${date}</small>`;
+          li.appendChild(label);
+
+          if (canManageNotices) {
+            const tools = document.createElement('span');
+            tools.className = 'tools';
+            const edit = document.createElement('button'); edit.textContent='Edit';
+            edit.onclick = ()=>{
+              editingNoticeId = n._id;
+              byId('nTitle').value = n.title;
+              byId('nBody').value  = n.body;
+              byId('nAudience').value = n.audience || 'all';
+              byId('noticeSubmit').textContent = 'Save';
+              byId('noticeCancel').style.display = 'inline-block';
+              window.scrollTo({ top: 0, behavior:'smooth' });
+            };
+            const del = document.createElement('button'); del.textContent='Delete';
+            del.onclick = async ()=>{ await api(`/notices/${n._id}`,'DELETE'); refresh(); };
+            tools.appendChild(edit); tools.appendChild(del);
+            li.appendChild(tools);
+          }
+
           el.appendChild(li);
         });
       }
@@ -225,9 +302,10 @@
       byId('cSearch').addEventListener('input', applyCourseFilter);
 
       // ---------- Forms ----------
-      // Students
+      // Students (Admin only)
       byId('studentForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
+        if (!isAdmin) return alert('Only admin can modify students.');
         const payload = {
           regNo: byId('sRegNo').value.trim(),
           name:  byId('sName').value.trim(),
@@ -247,9 +325,10 @@
       }
       byId('studentCancel').onclick = clearStudentEdit;
 
-      // Courses
+      // Courses (Admin + Teacher)
       byId('courseForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
+        if (!(isAdmin || isTeacher)) return alert('Only admin/teacher can modify courses.');
         const payload = {
           code: byId('cCode').value.trim(),
           title: byId('cTitle').value.trim(),
@@ -268,9 +347,10 @@
       }
       byId('courseCancel').onclick = clearCourseEdit;
 
-      // Enroll
+      // Enroll (Admin + Teacher)
       byId('enrollForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
+        if (!(isAdmin || isTeacher)) return alert('Only admin/teacher can enroll.');
         const sid = byId('eStudent').value.trim();
         const cid = byId('eCourse').value.trim();
         const isObjectId = /^[a-fA-F0-9]{24}$/;
@@ -280,9 +360,10 @@
         e.target.reset(); refresh();
       });
 
-      // Notices
+      // Notices (Admin + Teacher)
       byId('noticeForm').addEventListener('submit', async (e)=>{
         e.preventDefault();
+        if (isStudent) return alert('Only admin/teacher can publish notices.');
         const payload = {
           title: byId('nTitle').value.trim(),
           body: byId('nBody').value.trim(),
@@ -301,7 +382,33 @@
       }
       byId('noticeCancel').onclick = clearNoticeEdit;
 
-      // ---------- Refresh ----------
+      // ---------- Admin Approval UI ----------
+      async function loadPending() {
+        if (!isAdmin) return;
+        const list = await api('/admin/users?status=pending');
+        const ul = document.getElementById('pendingList');
+        ul.innerHTML = '';
+        list.forEach(u=>{
+          const li = document.createElement('li');
+          li.textContent = `${u.name} | ${u.email} | reqRole=${u.requestedRole} | ID=${u.institutionalId || '-'}`;
+          const tools = document.createElement('span'); tools.className='tools';
+          const approve = document.createElement('button'); approve.textContent='Approve';
+          approve.onclick = async ()=>{ await api(`/admin/users/${u._id}/approve`, 'PUT', {}); loadPending(); };
+          const reject = document.createElement('button'); reject.textContent='Reject';
+          reject.onclick = async ()=>{
+            const reason = prompt('Reason?') || 'Not approved';
+            await api(`/admin/users/${u._id}/reject`, 'PUT', { reason });
+            loadPending();
+          };
+          tools.appendChild(approve); tools.appendChild(reject);
+          li.appendChild(tools);
+          ul.appendChild(li);
+        });
+      }
+      const btnRefreshPending = document.getElementById('refreshPending');
+      if (btnRefreshPending) btnRefreshPending.onclick = loadPending;
+
+      // ---------- Data refresh ----------
       async function refresh(){
         const [students, courses, enrollments, notices] = await Promise.all([
           api('/students'),
@@ -315,6 +422,7 @@
         renderEnrollments(ENROLLS);
         renderNotices(NOTICES);
         populateEnrollmentSelects();
+        if (isAdmin) loadPending();
       }
 
       // Init
