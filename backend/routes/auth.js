@@ -1,3 +1,4 @@
+// backend/routes/auth.js
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
@@ -10,8 +11,11 @@ const ALLOWED_REQ_ROLES = ['teacher','student'];
 const norm = s => String(s || '').trim();
 const normEmail = e => norm(e).toLowerCase();
 
-// POST /api/auth/register  (public)
-// Body: { name, email, password, institutionalId, requestedRole: 'teacher'|'student' }
+/**
+ * POST /api/auth/register
+ * Body: { name, email, password, institutionalId, requestedRole: 'teacher'|'student' }
+ * New accounts are created with status:'pending' and must be approved by admin.
+ */
 router.post('/register', async (req, res) => {
   try {
     let { name, email, password, institutionalId, requestedRole } = req.body;
@@ -23,6 +27,7 @@ router.post('/register', async (req, res) => {
     email = normEmail(email);
     requestedRole = ALLOWED_REQ_ROLES.includes(requestedRole) ? requestedRole : 'student';
 
+    // Use model helper if available
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ error: 'Email already registered' });
 
@@ -35,7 +40,7 @@ router.post('/register', async (req, res) => {
       requestedRole,
       // New accounts wait for admin approval
       status: 'pending',
-      role: 'student' // final role set on approval
+      role: 'student' // final role will be set when admin approves (role may change to 'teacher' if requested)
     });
 
     return res.json({
@@ -49,45 +54,75 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login  (public)
+/**
+ * POST /api/auth/login
+ * Body: { email, password }
+ * Only approved users are allowed to login.
+ */
 router.post('/login', async (req, res) => {
-  const email = normEmail(req.body.email);
-  const password = req.body.password;
+  try {
+    const email = normEmail(req.body.email);
+    const password = req.body.password;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-  const ok = await user.verifyPassword(password);
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
-  if (user.status !== 'approved') {
-    return res.status(403).json({
-      error: user.status === 'pending'
-        ? 'Account pending approval by admin'
-        : `Login blocked: ${user.rejectionReason || 'account rejected'}`
+    const ok = await user.verifyPassword(password);
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // Block login unless admin approved
+    if (user.status !== 'approved') {
+      return res.status(403).json({
+        error: user.status === 'pending'
+          ? 'Account pending approval by admin'
+          : `Login blocked: ${user.rejectionReason || 'account rejected'}`
+      });
+    }
+
+    const token = jwt.sign(
+      { sub: user._id, role: user.role, name: user.name },
+      process.env.JWT_SECRET || 'devsecret',
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      token,
+      user: { id: user._id, name: user.name, role: user.role, email: user.email }
     });
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
   }
-
-  const token = jwt.sign(
-    { sub: user._id, role: user.role, name: user.name },
-    process.env.JWT_SECRET || 'devsecret',
-    { expiresIn: '7d' }
-  );
-
-  return res.json({
-    token,
-    user: { id: user._id, name: user.name, role: user.role, email: user.email }
-  });
 });
 
-// GET /api/auth/me (auth)
+/**
+ * GET /api/auth/me
+ * Returns basic user info (requires auth)
+ */
 router.get('/me', requireAuth, async (req, res) => {
-  const u = await User.findById(req.user.sub).select('_id name email role status requestedRole institutionalId createdAt');
-  if (!u) return res.status(404).json({ error: 'User not found' });
-  return res.json(u);
+  try {
+    const u = await User.findById(req.user.sub)
+      .select('_id name email role status requestedRole institutionalId createdAt')
+      .lean();
+
+    if (!u) return res.status(404).json({ error: 'User not found' });
+
+    // normalize id field for client (model toJSON may already do it)
+    u.id = u._id;
+    delete u._id;
+
+    return res.json(u);
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
 });
 
-// ADMIN BULK from Students remains (optional)
+/**
+ * ADMIN: Provision users from existing students (optional helper)
+ * POST /api/auth/provision-from-students
+ * Body: { defaultPassword?: string }
+ */
 router.post('/provision-from-students', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const defaultPassword = String(req.body?.defaultPassword || 'stud123');

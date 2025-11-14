@@ -1,432 +1,865 @@
 <!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>UMS | Dashboard</title>
-    <link rel="stylesheet" href="./assets/css/styles.css" />
-    <style>
-      .muted { color:#666; font-size:.9rem }
-      .tools { display:flex; gap:8px; margin-left:8px }
-      .hidden { display:none !important }
-    </style>
-  </head>
-  <body>
-    <nav>
-      <span id="who"></span>
-      <button id="logout">Logout</button>
-    </nav>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UMS | Dashboard</title>
+  <link rel="stylesheet" href="./assets/css/styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{ --accent:#2563eb; --card-radius:12px; --muted:#6b7280; --bg:#f4f7fb; }
+    body{ margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#0f172a; }
+    .app { display:flex; min-height:100vh; gap:18px; padding:18px; }
+    .sidebar { width:260px; background:#fff; border-radius:12px; padding:16px; box-shadow:0 8px 28px rgba(2,6,23,0.06); display:flex; flex-direction:column; gap:12px; align-items:stretch; }
+    .brand { font-weight:800; font-size:18px; color:var(--accent) }
+    .navbtn { display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:8px; cursor:pointer; border:none; background:transparent; text-align:left; color:#0f172a }
+    .navbtn.active{ background:linear-gradient(90deg, rgba(37,99,235,0.08), rgba(14,165,163,0.02)); }
+    .navbtn:hover{ background:rgba(2,6,23,0.03) }
+    .spacer{ flex:1 }
+    .main { flex:1; display:flex; flex-direction:column; gap:12px; }
+    header.topbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; background:transparent; }
+    .who { font-weight:600; color:var(--muted) }
+    .controls { display:flex; gap:8px; align-items:center }
+    .card { background:#fff; border-radius:12px; padding:14px; box-shadow:0 6px 20px rgba(16,24,40,0.04); border:1px solid #f0f2f6; }
+    table{ width:100%; border-collapse:collapse; font-size:14px }
+    thead th{ text-align:left; padding:10px 12px; font-weight:700; color:var(--muted); border-bottom:1px solid #f0f2f6 }
+    tbody td{ padding:10px 12px; border-bottom:1px dashed #f6f7fb }
+    .actions button{ margin-left:8px; padding:6px 8px; border-radius:6px; cursor:pointer; border:0; background:#f3f4f6 }
+    .actions button.primary{ background:var(--accent); color:#fff }
+    .small{ font-size:13px; color:var(--muted) }
+    .muted{ color:#6b7280; font-size:.9rem }
+    .modal-backdrop{ position:fixed; inset:0; background:rgba(2,6,23,0.45); display:none; align-items:center; justify-content:center; z-index:1200 }
+    .modal{ width:720px; max-width:95%; background:#fff; border-radius:12px; padding:16px; box-shadow:0 20px 60px rgba(2,6,23,0.5) }
+    .modal header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px }
+    .modal form{ display:grid; grid-template-columns:1fr 1fr; gap:10px }
+    .modal form .full{ grid-column:1/-1 }
+    .materials-list { margin-top:8px; padding:8px; background:#fbfdff; border-radius:8px; border:1px solid #eef5ff }
+    .material-item { padding:8px; border-radius:8px; background:#fff; margin-bottom:8px; border:1px solid #f1f5f9 }
+    .material-item small { color:var(--muted) }
+    .results-area { margin-top:12px; }
+    .results-area table{ margin-top:8px }
+    .results-upload { margin-top:12px; padding:12px; border-radius:8px; background:#fbfbff; border:1px solid #eef5ff }
+    .material-item a, .btn-inline { text-decoration:none; color:var(--accent); cursor:pointer }
+    @media (max-width:900px){ .app{ flex-direction:column; padding:12px } .sidebar{ width:100%; flex-direction:row; overflow:auto; gap:8px; padding:8px } .main{ width:100% } }
+    .toast{ position:fixed; right:18px; bottom:18px; background:#111; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 8px 40px rgba(2,6,23,0.35); display:none; z-index:1300 }
+    /* small form inputs */
+    input, select, textarea { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef; box-sizing:border-box; }
+    button.primary{ background:var(--accent); color:#fff; border-radius:8px; padding:8px 12px; border:0; cursor:pointer }
+    button.ghost{ background:transparent; border:1px solid #e6e9ef; padding:8px 10px; border-radius:8px; cursor:pointer }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar card" id="sidebar">
+      <div class="brand">UMS — Dashboard</div>
+      <div class="small muted">Logged in as <span id="whoSmall">—</span></div>
+      <hr/>
+      <button class="navbtn active" data-view="students">Students</button>
+      <button class="navbtn" data-view="courses">Courses</button>
+      <button class="navbtn" data-view="enrollments">Enrollments</button>
+      <button class="navbtn" data-view="notices">Notices</button>
+      <button class="navbtn" data-view="approvals">Approvals</button>
+      <!-- New Results nav -->
+      <button class="navbtn" data-view="results">Results</button>
 
-    <main class="grid">
-      <!-- Admin-only: Pending Approvals -->
-      <section id="adminUsers" class="hidden">
-        <h2>Pending Approvals</h2>
-        <div class="muted">Approve or reject signup requests.</div>
-        <button id="refreshPending">Refresh</button>
-        <ul id="pendingList"></ul>
-      </section>
+      <div class="spacer"></div>
+      <div style="display:flex; gap:8px">
+        <button id="btnProfile" class="navbtn">Profile</button>
+        <button id="logout" class="navbtn" style="margin-left:auto">Logout</button>
+      </div>
+    </aside>
 
-      <!-- Students (Admin-only full CRUD; Teacher/Student read-only list) -->
-      <section id="secStudents">
-        <h2>Students</h2>
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h1 style="margin:0">Management</h1>
+          <div class="small muted">University Management System</div>
+        </div>
+        <div class="controls">
+          <input id="globalSearch" placeholder="Search..." style="padding:8px 10px; border-radius:8px; border:1px solid #e6e9ef" />
+          <button id="btnRefresh" class="ghost">Refresh</button>
+        </div>
+      </header>
 
-        <form id="studentForm">
-          <input placeholder="Reg No" id="sRegNo" required />
-          <input placeholder="Name" id="sName" required />
-          <input placeholder="Email" id="sEmail" type="email" required />
-          <input placeholder="Department" id="sDept" required />
-          <input placeholder="Semester" id="sSem" type="number" min="1" max="8" value="1" />
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="studentSubmit">Add</button>
-            <button id="studentCancel" type="button" style="display:none;">Cancel Edit</button>
+      <div id="viewArea" style="display:grid; gap:12px">
+        <section id="view-students" class="card" style="display:block">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+            <h2 style="margin:0">Students</h2>
+            <div><button id="addStudentBtn" class="primary">+ Add student</button></div>
+          </div>
+          <div style="margin-top:12px">
+            <table>
+              <thead><tr><th>Reg No</th><th>Name</th><th>Email</th><th>Dept</th><th>Sem</th><th>Actions</th></tr></thead>
+              <tbody id="tblStudents"><tr><td colspan="6" class="small">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="view-courses" class="card" style="display:none">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+            <h2 style="margin:0">Courses</h2>
+            <div><button id="addCourseBtn" class="primary">+ Add course</button></div>
+          </div>
+          <div style="margin-top:12px">
+            <table>
+              <thead><tr><th>Code</th><th>Title</th><th>Dept</th><th>Credits</th><th>Actions</th></tr></thead>
+              <tbody id="tblCourses"><tr><td colspan="5" class="small">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="view-enrollments" class="card" style="display:none">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <h2 style="margin:0">Enrollments</h2>
+            <div><button id="addEnrollBtn" class="primary">+ New Enrollment</button></div>
+          </div>
+          <div style="margin-top:12px">
+            <table>
+              <thead><tr><th>Student</th><th>Course</th><th>Grade</th><th>Actions</th></tr></thead>
+              <tbody id="tblEnrollments"><tr><td colspan="4" class="small">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="view-notices" class="card" style="display:none">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <h2 style="margin:0">Notice Board</h2>
+            <div><button id="addNoticeBtn" class="primary">+ Publish Notice</button></div>
+          </div>
+          <div style="margin-top:12px">
+            <ul id="listNotices" style="padding:0; list-style:none; display:flex; flex-direction:column; gap:10px"></ul>
+          </div>
+        </section>
+
+        <section id="view-approvals" class="card" style="display:none">
+          <div style="display:flex; justify-content:space-between; align-items:center">
+            <h2 style="margin:0">Pending Approvals</h2>
+            <div><button id="refreshPending" class="ghost">Refresh</button></div>
+          </div>
+          <div style="margin-top:12px">
+            <table>
+              <thead><tr><th>Name</th><th>Email</th><th>Req Role</th><th>ID</th><th>Actions</th></tr></thead>
+              <tbody id="tblApprovals"><tr><td colspan="5" class="small">No pending requests</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- RESULTS VIEW -->
+        <section id="view-results" class="card" style="display:none">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px">
+            <h2 style="margin:0">Results</h2>
+            <div class="small muted">View student marks & semester PDFs</div>
+          </div>
+
+          <div id="studentResultsArea" class="results-area" style="display:none">
+            <h3>Your Internal Marks (course-wise)</h3>
+            <table>
+              <thead><tr><th>Course</th><th>Marks</th></tr></thead>
+              <tbody id="tblInternalMarks"><tr><td colspan="2" class="small">Loading…</td></tr></tbody>
+            </table>
+
+            <h3 style="margin-top:16px">Semester Result (PDF)</h3>
+            <div id="semesterResultPDF" style="margin-top:8px" class="small">Loading…</div>
+          </div>
+
+          <div id="adminResultArea" class="results-area" style="display:none">
+            <div class="results-upload">
+              <h4>Upload semester result PDF for a student</h4>
+              <form id="uploadResultPDF" enctype="multipart/form-data">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+                  <div><label>Student <select name="student" id="resultStudentList"></select></label></div>
+                  <div><label>Semester <input name="semester" placeholder="e.g. 5"></label></div>
+                </div>
+                <div style="margin-top:8px">
+                  <label>PDF File <input type="file" name="resultPDF" accept="application/pdf" required></label>
+                </div>
+                <div style="margin-top:8px; text-align:right">
+                  <button type="submit" class="primary">Upload PDF</button>
+                </div>
+              </form>
+            </div>
+
+            <div style="margin-top:12px" class="results-upload">
+              <h4>Enter / Update Internal Marks</h4>
+              <form id="internalMarksForm">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+                  <div><label>Student <select name="student" id="internalStudentList"></select></label></div>
+                  <div><label>Course <select name="course" id="internalCourseList"></select></label></div>
+                </div>
+                <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px">
+                  <div><label>Marks <input type="number" name="marks" min="0" max="100" required></label></div>
+                  <div><label>Remarks <input name="remarks" placeholder="optional"></label></div>
+                </div>
+                <div style="margin-top:8px; text-align:right"><button type="submit" class="primary">Save Marks</button></div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" id="modalBox">
+      <header>
+        <strong id="modalTitle">Modal</strong>
+        <button id="modalClose" style="background:transparent;border:0;font-weight:700;cursor:pointer">✕</button>
+      </header>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="./assets/js/api.js"></script>
+  <script>
+  /*************************************************************************
+   * Dashboard with Results support
+   *************************************************************************/
+  const API_FALLBACK = "http://127.0.0.1:4000/api";
+
+  function toast(msg, t=2500){ const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none',t); }
+
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const token = localStorage.getItem('token');
+  const userId = user?.id || user?._id || null;
+  if (!token) location.href = './index.html';
+  document.getElementById('whoSmall').textContent = `${user?.name||'User'} (${user?.role||'—'})`;
+
+  // Logout
+  (function setupLogout(){
+    const btn = document.getElementById('logout');
+    if (!btn) return;
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+        if (token) {
+          await fetch(base + '/auth/logout', { method:'POST', headers: { 'Authorization': 'Bearer ' + token } }).catch(()=>null);
+        }
+      } catch(_) {}
+      localStorage.removeItem('token'); localStorage.removeItem('user');
+      window.location.href = './index.html';
+    });
+  })();
+
+  // unified API wrapper for JSON requests
+  async function fetchAPI(path, method='GET', body=null){
+    if (typeof api === 'function') return api(path, method, body); // prefer global api() if provided
+    const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+    const headers = { 'Content-Type':'application/json' };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const res = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    if (res.status === 204) return null;
+    const data = await res.json().catch(()=> null);
+    if (!res.ok) throw new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
+    return data;
+  }
+
+  // modal helpers
+  const modalBackdrop = document.getElementById('modalBackdrop');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  document.getElementById('modalClose').onclick = ()=> { modalBackdrop.style.display='none'; modalBody.innerHTML=''; };
+
+  function openModal(title, html){
+    modalTitle.textContent = title;
+    modalBody.innerHTML = html;
+    modalBackdrop.style.display = 'flex';
+  }
+
+  // NAV
+  const navButtons = Array.from(document.querySelectorAll('.navbtn'));
+  function showView(name){
+    navButtons.forEach(b=> b.classList.toggle('active', b.dataset.view===name));
+    document.querySelectorAll('[id^="view-"]').forEach(s=> s.style.display='none');
+    const el = document.getElementById('view-'+name); if (el) el.style.display='block';
+    if (name==='students') refreshStudents();
+    if (name==='courses') refreshCourses();
+    if (name==='enrollments') refreshEnrollments();
+    if (name==='notices') refreshNotices();
+    if (name==='approvals') loadPending();
+    if (name==='results') loadResults();
+  }
+  navButtons.forEach(b=> b.addEventListener('click', ()=> showView(b.dataset.view)));
+
+  // role-based UI
+  (function roleHide(){
+    const role = user?.role || 'student';
+    if (role !== 'admin') document.querySelectorAll('.navbtn[data-view="approvals"]').forEach(n=> n.style.display='none');
+    if (role === 'student') {
+      document.querySelectorAll('.navbtn[data-view="enrollments"]').forEach(n=> n.style.display='none');
+      document.getElementById('addStudentBtn')?.remove();
+      document.getElementById('addCourseBtn')?.remove();
+      document.getElementById('addEnrollBtn')?.remove();
+      document.getElementById('addNoticeBtn')?.remove();
+      // students should see Results nav (we keep it visible)
+    } else if (role === 'teacher') {
+      document.querySelectorAll('.navbtn[data-view="approvals"]').forEach(n=> n.style.display='none');
+    }
+  })();
+
+  // ---------- STUDENTS ----------
+  const tblStudents = document.getElementById('tblStudents');
+  async function refreshStudents(){
+    tblStudents.innerHTML = '<tr><td colspan="6" class="small">Loading…</td></tr>';
+    try {
+      const list = await fetchAPI('/students');
+      if (!list || list.length===0) { tblStudents.innerHTML = '<tr><td colspan="6" class="small">No students yet</td></tr>'; return; }
+      tblStudents.innerHTML = list.map(s=>`
+        <tr>
+          <td>${s.regNo||'-'}</td>
+          <td>${s.name||'-'}</td>
+          <td>${s.email||'-'}</td>
+          <td>${s.department||'-'}</td>
+          <td>${s.semester||'-'}</td>
+          <td class="actions">
+            ${(user?.role === 'admin') ? `<button class="small" data-action="edit-student" data-id="${s._id}">Edit</button> <button class="small" data-action="delete-student" data-id="${s._id}">Delete</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    } catch(e){ tblStudents.innerHTML = `<tr><td colspan="6" class="small">Error: ${e.message}</td></tr>`; }
+  }
+
+  document.getElementById('addStudentBtn')?.addEventListener('click', ()=> { openModal('Add student', studentFormHtml()); bindStudentFormSubmit(); });
+
+  function studentFormHtml(student={}){ return `
+    <form id="studentModalForm">
+      <div><label>Reg No <input name="regNo" value="${student.regNo||''}" required></label></div>
+      <div><label>Name <input name="name" value="${student.name||''}" required></label></div>
+      <div><label>Email <input name="email" value="${student.email||''}" type="email" required></label></div>
+      <div><label>Department <input name="department" value="${student.department||''}" required></label></div>
+      <div><label>Semester <input name="semester" value="${student.semester||1}" type="number" min="1" max="8"></label></div>
+      <div style="grid-column:1/-1; text-align:right; margin-top:8px">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="cancelStudent" class="ghost">Cancel</button>
+      </div>
+    </form>`; }
+
+  function bindStudentFormSubmit(editId){
+    const f = document.getElementById('studentModalForm');
+    document.getElementById('cancelStudent').onclick = ()=> { modalBackdrop.style.display='none'; };
+    f.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const fd = Object.fromEntries(new FormData(f).entries());
+      fd.semester = Number(fd.semester||1);
+      try {
+        if (editId) await fetchAPI(`/students/${editId}`,'PUT', fd);
+        else await fetchAPI('/students','POST', fd);
+        modalBackdrop.style.display='none'; toast('Saved'); refreshStudents();
+      } catch(e){ alert('Error: '+e.message); }
+    };
+  }
+
+  // delegated student actions
+  tblStudents.addEventListener('click', async (ev)=> {
+    const btn = ev.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.id; const act = btn.dataset.action;
+    if (act === 'edit-student') {
+      const s = await fetchAPI(`/students/${id}`);
+      openModal('Edit student', studentFormHtml(s));
+      bindStudentFormSubmit(id);
+    } else if (act === 'delete-student') {
+      if (!confirm('Delete this student?')) return;
+      await fetchAPI(`/students/${id}`,'DELETE');
+      toast('Deleted'); refreshStudents();
+    }
+  });
+
+  // ---------- COURSES & MATERIALS ----------
+  const tblCourses = document.getElementById('tblCourses');
+
+  async function refreshCourses(){
+    tblCourses.innerHTML = '<tr><td colspan="5" class="small">Loading…</td></tr>';
+    try {
+      let courses = [];
+      const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+
+      if (user.role === 'student') {
+        // find student record linked to this user
+        const students = await fetchAPI('/students');
+        const meStudent = (students || []).find(s => {
+          if (!s) return false;
+          if (s.user) {
+            const uid = typeof s.user === 'object' ? (s.user._id || s.user.id) : s.user;
+            return String(uid) === String(userId);
+          }
+          return String(s.email || '').toLowerCase() === String(user.email || '').toLowerCase();
+        });
+        if (!meStudent) { tblCourses.innerHTML = '<tr><td colspan="5" class="small">No student record linked to your account.</td></tr>'; return; }
+
+        // get enrollments for this student
+        const enrolls = await fetchAPI('/enrollments');
+        const myEnrolls = (enrolls || []).filter(e => {
+          const sid = (typeof e.student === 'object') ? (e.student._id || e.student.id) : e.student;
+          return String(sid) === String(meStudent._id || meStudent._id);
+        });
+
+        if (!myEnrolls.length) { tblCourses.innerHTML = '<tr><td colspan="5" class="small">You are not enrolled in any course.</td></tr>'; return; }
+
+        // gather course objects
+        courses = [];
+        for (const en of myEnrolls) {
+          if (en.course && typeof en.course === 'object') courses.push(en.course);
+          else courses.push(await fetchAPI(`/courses/${en.course}`));
+        }
+      } else {
+        courses = await fetchAPI('/courses') || [];
+      }
+
+      if (!courses.length) { tblCourses.innerHTML = '<tr><td colspan="5" class="small">No courses</td></tr>'; return; }
+
+      const rows = [];
+      for (const c of courses) {
+        const cid = c._id || c.id;
+        rows.push(`
+          <tr data-course-id="${cid}">
+            <td>${c.code||'-'}</td>
+            <td>${c.title||'-'}</td>
+            <td>${c.department||'-'}</td>
+            <td>${c.credits||'-'}</td>
+            <td class="actions">
+              <button class="small" data-id="${cid}" data-action="view-course">View</button>
+              ${(user.role==='admin'||user.role==='teacher') ? `<button class="small" data-id="${cid}" data-action="add-material">Add Material</button><button class="small" data-id="${cid}" data-action="edit-course">Edit</button><button class="small" data-id="${cid}" data-action="delete-course">Delete</button>` : `—`}
+            </td>
+          </tr>
+        `);
+        if (user.role === 'student') {
+          rows.push(`<tr class="materials-row" data-course-id="${cid}"><td colspan="5" class="small">Loading materials…</td></tr>`);
+        }
+      }
+
+      tblCourses.innerHTML = rows.join('');
+
+      // populate materials rows for students
+      if (user.role === 'student') {
+        const matRows = Array.from(document.querySelectorAll('.materials-row'));
+        await Promise.all(matRows.map(async (mr) => {
+          const cid = mr.getAttribute('data-course-id');
+          try {
+            const mats = await fetchAPI(`/materials/${cid}`);
+            if (!mats || mats.length===0) { mr.innerHTML = '<td colspan="5" class="small">No study materials for this course.</td>'; return; }
+            const html = `<td colspan="5">
+              <div class="materials-list">
+                ${mats.map(m => {
+                  const fileLink = m.filePath ? `<a href="${(base.replace(/\/api$/,'') + m.filePath)}" target="_blank">Download</a>` : (m.url ? `<a href="${m.url}" target="_blank">Open</a>` : '');
+                  const urlHtml = (m.type === 'youtube' && m.url) ? `<a href="${m.url}" target="_blank">Watch on YouTube</a>` : fileLink;
+                  return `
+                  <div class="material-item">
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                      <div><strong>${m.title || 'Material'}</strong> <small>(${m.type || 'link'})</small></div>
+                      <div class="small muted">${new Date(m.createdAt || m.created_at || Date.now()).toLocaleString()}</div>
+                    </div>
+                    <div style="margin-top:6px">${urlHtml}</div>
+                    ${m.note ? `<div style="margin-top:6px" class="small">${m.note}</div>` : ''}
+                  </div>
+                  `;
+                }).join('')}
+              </div>
+            </td>`;
+            mr.innerHTML = html;
+          } catch(err){
+            mr.innerHTML = `<td colspan="5" class="small">Materials load error: ${err.message}</td>`;
+          }
+        }));
+      }
+
+    } catch(e){
+      tblCourses.innerHTML = `<tr><td colspan="5" class="small">Error: ${e.message}</td></tr>`;
+    }
+  }
+
+  document.getElementById('addCourseBtn')?.addEventListener('click', ()=> { openModal('Add course', courseFormHtml()); bindCourseFormSubmit(); });
+
+  function courseFormHtml(course={}){ return `
+    <form id="courseModalForm">
+      <div><label>Code <input name="code" value="${course.code||''}" required></label></div>
+      <div><label>Title <input name="title" value="${course.title||''}" required></label></div>
+      <div><label>Credits <input name="credits" value="${course.credits||3}" type="number"></label></div>
+      <div><label>Department <input name="department" value="${course.department||''}" required></label></div>
+      <div style="grid-column:1/-1; text-align:right; margin-top:8px">
+        <button type="submit" class="primary">Save</button>
+        <button type="button" id="cancelCourse" class="ghost">Cancel</button>
+      </div>
+    </form>`; }
+
+  function bindCourseFormSubmit(editId){
+    const f = document.getElementById('courseModalForm');
+    document.getElementById('cancelCourse').onclick = ()=> { modalBackdrop.style.display='none'; };
+    f.onsubmit = async (ev)=>{
+      ev.preventDefault();
+      const fd = Object.fromEntries(new FormData(f).entries());
+      fd.credits = Number(fd.credits||3);
+      try {
+        if (editId) await fetchAPI(`/courses/${editId}`,'PUT', fd);
+        else await fetchAPI('/courses','POST', fd);
+        modalBackdrop.style.display='none'; toast('Saved'); refreshCourses();
+      } catch(e){ alert('Error: '+e.message); }
+    };
+  }
+
+  // delegated actions for courses
+  tblCourses.addEventListener('click', async (ev)=>{
+    const btn = ev.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.id; const act = btn.dataset.action;
+    if (act === 'view-course') {
+      try {
+        const c = await fetchAPI(`/courses/${id}`);
+        let mats = [];
+        try { mats = await fetchAPI(`/materials/${id}`); } catch(_) { mats = []; }
+        const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+        const matsHtml = mats.length ? mats.map(m => `
+          <div style="padding:8px; border-radius:8px; border:1px solid #eef5ff; margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between"><strong>${m.title||'Material'}</strong><small class="muted">${m.type}</small></div>
+            <div style="margin-top:6px">${m.type==='youtube' ? `<a href="${m.url}" target="_blank">Watch</a>` : (m.filePath ? `<a href="${(base.replace(/\/api$/,'') + m.filePath)}" target="_blank">Download</a>` : `<a href="${m.url}" target="_blank">Open</a>`)}</div>
+            ${m.note ? `<div class="small" style="margin-top:6px">${m.note}</div>` : ''}
+          </div>
+        `).join('') : '<div class="small">No study materials</div>';
+
+        const html = `<div>
+          <h3 style="margin-top:0">${c.title||''}</h3>
+          <p><strong>Code:</strong> ${c.code||'-'}</p>
+          <p><strong>Department:</strong> ${c.department||'-'}</p>
+          <p><strong>Credits:</strong> ${c.credits||'-'}</p>
+          <hr/>
+          <h4>Study Materials</h4>
+          ${matsHtml}
+        </div>`;
+        openModal('Course - ' + (c.title||''), html);
+      } catch(e){ alert('Error: '+e.message); }
+    } else if (act === 'add-material') {
+      // add material modal (with file input)
+      const html = `
+        <form id="materialForm" enctype="multipart/form-data">
+          <div class="full"><label>Title <input name="title" required></label></div>
+          <div class="full"><label>Type
+            <select name="type">
+              <option value="pdf">PDF</option>
+              <option value="image">Image</option>
+              <option value="youtube">YouTube</option>
+              <option value="link">External Link</option>
+              <option value="text">Text</option>
+            </select>
+          </label></div>
+          <div class="full"><label>URL (optional) <input name="url" placeholder="http://... or YouTube link"></label></div>
+          <div class="full"><label>File (PDF / Image) <input type="file" name="file" accept=".pdf,image/*"></label></div>
+          <div class="full"><label>Note <textarea name="note"></textarea></label></div>
+          <div style="grid-column:1/-1; text-align:right; margin-top:8px">
+            <button class="primary" type="submit">Add</button>
+            <button id="cancelMaterial" type="button" class="ghost">Cancel</button>
           </div>
         </form>
+      `;
+      openModal('Add Study Material', html);
+      document.getElementById('cancelMaterial').onclick = ()=> modalBackdrop.style.display='none';
 
-        <input id="sSearch" placeholder="Search students by name/regNo/department..." />
-        <ul id="students"></ul>
-      </section>
+      // note: `id` is course id from btn.dataset.id
+      document.getElementById('materialForm').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const form = ev.target;
+        const formData = new FormData(form); // includes file
+        const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+        try {
+          const res = await fetch(`${base}/materials/${id}`, {
+            method: 'POST',
+            headers: token ? { 'Authorization': 'Bearer ' + token } : undefined,
+            body: formData
+          });
+          const data = await res.json().catch(()=> null);
+          if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+          modalBackdrop.style.display='none';
+          toast('Material added');
+          refreshCourses();
+        } catch (err) {
+          alert('Add material failed: ' + (err.message || err));
+        }
+      };
+    } else if (act === 'edit-course') {
+      const c = await fetchAPI(`/courses/${id}`);
+      openModal('Edit Course', courseFormHtml(c));
+      bindCourseFormSubmit(id);
+    } else if (act === 'delete-course') {
+      if (!confirm('Delete this course?')) return;
+      await fetchAPI(`/courses/${id}`,'DELETE');
+      toast('Deleted'); refreshCourses();
+    }
+  });
 
-      <!-- Courses (Admin+Teacher manage; Student read-only) -->
-      <section id="secCourses">
-        <h2>Courses</h2>
+  // ---------- ENROLLMENTS ----------
+  const tblEnrollments = document.getElementById('tblEnrollments');
+  async function refreshEnrollments(){
+    tblEnrollments.innerHTML = '<tr><td colspan="4" class="small">Loading…</td></tr>';
+    try {
+      const enrolls = await fetchAPI('/enrollments');
+      const list = enrolls || [];
+      if (!list || list.length===0) { tblEnrollments.innerHTML = '<tr><td colspan="4" class="small">No enrollments yet</td></tr>'; return; }
+      tblEnrollments.innerHTML = list.map(e=>`
+        <tr>
+          <td>${e.student?.name || '-'}</td>
+          <td>${e.course?.title || '-'}</td>
+          <td>${e.grade || '-'}</td>
+          <td class="actions">
+            ${(user?.role==='admin'||user?.role==='teacher')? `<button class="small" data-id="${e._id}" data-action="edit-enroll">Grade</button> <button class="small" data-id="${e._1}" data-action="delete-enroll">Delete</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    } catch(e){ tblEnrollments.innerHTML = `<tr><td colspan="4" class="small">Error: ${e.message}</td></tr>`; }
+  }
 
-        <form id="courseForm">
-          <input placeholder="Code" id="cCode" required />
-          <input placeholder="Title" id="cTitle" required />
-          <input placeholder="Credits" id="cCredits" type="number" value="3" />
-          <input placeholder="Department" id="cDept" required />
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="courseSubmit">Add</button>
-            <button id="courseCancel" type="button" style="display:none;">Cancel Edit</button>
+  document.getElementById('addEnrollBtn')?.addEventListener('click', async ()=>{
+    try {
+      const students = await fetchAPI('/students');
+      const courses = await fetchAPI('/courses');
+      const html = `
+        <form id="enrollFormModal">
+          <div class="full"><label>Student <select name="student">${students.map(s=>`<option value="${s._id}">${s.name} (${s.regNo})</option>`).join('')}</select></label></div>
+          <div class="full"><label>Course <select name="course">${courses.map(c=>`<option value="${c._1 || c._id || c.id}">${c.title} [${c.code}]</option>`).join('')}</select></label></div>
+          <div style="grid-column:1/-1; text-align:right; margin-top:8px">
+            <button class="primary" type="submit">Enroll</button>
+            <button id="cancelEnroll" type="button" class="ghost">Cancel</button>
           </div>
         </form>
+      `;
+      openModal('New Enrollment', html);
+      document.getElementById('cancelEnroll').onclick = ()=> modalBackdrop.style.display='none';
+      document.getElementById('enrollFormModal').onsubmit = async (ev)=>{
+        ev.preventDefault();
+        const fd = Object.fromEntries(new FormData(ev.target).entries());
+        await fetchAPI('/enrollments','POST', fd);
+        modalBackdrop.style.display='none'; toast('Enrolled'); refreshEnrollments(); refreshCourses();
+      };
+    } catch(e){ alert('Error preparing form: '+e.message); }
+  });
 
-        <input id="cSearch" placeholder="Search courses by title/code/department..." />
-        <ul id="courses"></ul>
-      </section>
+  tblEnrollments.addEventListener('click', async (ev)=>{
+    const btn = ev.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.id; const act = btn.dataset.action;
+    if (act === 'edit-enroll'){
+      const e = await fetchAPI(`/enrollments/${id}`);
+      const html = `<form id="gradeForm"><div class="full"><label>Grade
+        <select name="grade"><option value="">-</option><option>A</option><option>B</option><option>C</option><option>D</option><option>E</option><option>F</option></select>
+      </label></div><div style="grid-column:1/-1; text-align:right; margin-top:8px"><button class="primary" type="submit">Save</button><button id="cancelGrade" type="button" class="ghost">Cancel</button></div></form>`;
+      openModal('Update Grade', html);
+      document.getElementById('cancelGrade').onclick = ()=> modalBackdrop.style.display='none';
+      document.getElementById('gradeForm').onsubmit = async (ev)=>{
+        ev.preventDefault();
+        const fd = Object.fromEntries(new FormData(ev.target).entries());
+        await fetchAPI(`/enrollments/${id}`,'PUT', fd);
+        modalBackdrop.style.display='none'; toast('Grade updated'); refreshEnrollments();
+      };
+    } else if (act === 'delete-enroll'){
+      if (!confirm('Remove enrollment?')) return;
+      await fetchAPI(`/enrollments/${id}`,'DELETE'); toast('Deleted'); refreshEnrollments(); refreshCourses();
+    }
+  });
 
-      <!-- Enrollments (Admin+Teacher manage; Student read-only list) -->
-      <section id="secEnrollments">
-        <h2>Enrollments</h2>
-        <form id="enrollForm">
-          <select id="eStudent" required></select>
-          <select id="eCourse" required></select>
-          <button>Enroll</button>
-        </form>
-        <ul id="enrollments"></ul>
-      </section>
-
-      <!-- Notices (Admin+Teacher can publish; Student view only) -->
-      <section id="secNotices">
-        <h2>Notice Board</h2>
-        <form id="noticeForm">
-          <input id="nTitle" placeholder="Notice title" required />
-          <textarea id="nBody" placeholder="Notice body..." rows="3" required></textarea>
-          <select id="nAudience">
-            <option value="all">All</option>
-            <option value="students">Students</option>
-            <option value="teachers">Teachers</option>
-          </select>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button id="noticeSubmit">Publish</button>
-            <button id="noticeCancel" type="button" style="display:none;">Cancel Edit</button>
+  // ---------- NOTICES ----------
+  const listNotices = document.getElementById('listNotices');
+  async function refreshNotices(){
+    listNotices.innerHTML = '<div class="small">Loading…</div>';
+    try {
+      const notices = await fetchAPI('/notices');
+      if (!notices || notices.length===0) { listNotices.innerHTML = '<div class="small">No notices</div>'; return; }
+      listNotices.innerHTML = notices.map(n=>`
+        <div style="background:#fafbff; padding:12px; border-radius:8px; border:1px solid #f0f2f6">
+          <div style="display:flex; justify-content:space-between; gap:10px">
+            <div><strong>${n.title}</strong> <span class="small muted">[${n.audience}]</span><div class="small muted">${new Date(n.publishedAt||n.createdAt).toLocaleString()}</div></div>
+            <div>${(user?.role==='admin'||user?.role==='teacher')? `<button class="small" data-id="${n._id}" data-action="edit-notice">Edit</button> <button class="small" data-id="${n._id}" data-action="delete-notice">Delete</button>` : ''}</div>
           </div>
+          <div style="margin-top:8px">${n.body}</div>
+        </div>
+      `).join('');
+    } catch(e){ listNotices.innerHTML = `<div class="small">Error: ${e.message}</div>`; }
+  }
+
+  document.getElementById('addNoticeBtn')?.addEventListener('click', ()=>{
+    openModal('Publish Notice', `
+      <form id="noticeModalForm">
+        <div class="full"><label>Title <input name="title" required></label></div>
+        <div class="full"><label>Body <textarea name="body" rows="4" required></textarea></label></div>
+        <div class="full"><label>Audience <select name="audience"><option value="all">All</option><option value="students">Students</option><option value="teachers">Teachers</option></select></label></div>
+        <div style="grid-column:1/-1; text-align:right; margin-top:8px"><button class="primary" type="submit">Publish</button><button id="cancelNotice" type="button" class="ghost">Cancel</button></div>
+      </form>
+    `);
+    document.getElementById('cancelNotice').onclick = ()=> modalBackdrop.style.display='none';
+    document.getElementById('noticeModalForm').onsubmit = async (ev)=>{
+      ev.preventDefault();
+      const fd = Object.fromEntries(new FormData(ev.target).entries());
+      await fetchAPI('/notices','POST', fd);
+      modalBackdrop.style.display='none'; toast('Published'); refreshNotices();
+    };
+  });
+
+  listNotices.addEventListener('click', async (ev)=>{
+    const btn = ev.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.id; const act = btn.dataset.action;
+    if (act === 'edit-notice'){
+      const n = await fetchAPI(`/notices/${id}`);
+      openModal('Edit Notice', `
+        <form id="noticeEditForm">
+          <div class="full"><label>Title <input name="title" value="${n.title||''}" required></label></div>
+          <div class="full"><label>Body <textarea name="body" rows="4" required>${n.body||''}</textarea></label></div>
+          <div class="full"><label>Audience <select name="audience"><option value="all">All</option><option value="students">Students</option><option value="teachers">Teachers</option></select></label></div>
+          <div style="grid-column:1/-1; text-align:right; margin-top:8px"><button class="primary" type="submit">Save</button><button id="cancelNoticeEdit" type="button" class="ghost">Cancel</button></div>
         </form>
-        <ul id="notices"></ul>
-      </section>
-    </main>
+      `);
+      document.getElementById('cancelNoticeEdit').onclick = ()=> modalBackdrop.style.display='none';
+      document.getElementById('noticeEditForm').onsubmit = async (ev)=>{
+        ev.preventDefault();
+        const fd = Object.fromEntries(new FormData(ev.target).entries());
+        await fetchAPI(`/notices/${id}`,'PUT', fd);
+        modalBackdrop.style.display='none'; toast('Saved'); refreshNotices();
+      };
+    } else if (act === 'delete-notice'){
+      if (!confirm('Delete this notice?')) return;
+      await fetchAPI(`/notices/${id}`,'DELETE'); toast('Deleted'); refreshNotices();
+    }
+  });
 
-    <script src="./assets/js/api.js"></script>
-    <script>
-      // --- Auth guard & role flags ---
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const token = localStorage.getItem('token');
-      if (!token) window.location.href = './index.html';
-      document.getElementById('who').textContent = `Logged in: ${user.name} (${user.role})`;
-      document.getElementById('logout').onclick = () => { localStorage.clear(); location.href='./index.html' };
+  // ---------- APPROVALS (admin) ----------
+  const tblApprovals = document.getElementById('tblApprovals');
+  async function loadPending(){
+    if (user.role !== 'admin'){ tblApprovals.innerHTML = '<tr><td colspan="5" class="small">Access denied</td></tr>'; return; }
+    tblApprovals.innerHTML = '<tr><td colspan="5" class="small">Loading…</td></tr>';
+    try {
+      const list = await fetchAPI('/admin/users?status=pending');
+      if (!list || list.length===0) { tblApprovals.innerHTML = '<tr><td colspan="5" class="small">No pending requests</td></tr>'; return; }
+      tblApprovals.innerHTML = list.map(u=>{
+        const uid = u._id || u.id || '';
+        return `<tr><td>${u.name||'-'}</td><td>${u.email||'-'}</td><td>${u.requestedRole||'-'}</td><td>${u.institutionalId||'-'}</td><td class="actions"><button class="small" data-id="${uid}" data-action="approve">Approve</button><button class="small" data-id="${uid}" data-action="reject">Reject</button></td></tr>`;
+      }).join('');
+    } catch(e) { tblApprovals.innerHTML = `<tr><td colspan="5" class="small">Error: ${e.message}</td></tr>`; }
+  }
 
-      const isAdmin = user.role === 'admin';
-      const isTeacher = user.role === 'teacher';
-      const isStudent = user.role === 'student';
+  tblApprovals.addEventListener('click', async (ev)=>{
+    const btn = ev.target.closest('button'); if (!btn) return;
+    const id = btn.dataset.id; const act = btn.dataset.action;
+    if (!id) { alert('User id missing — refresh and try'); loadPending(); return; }
+    if (act === 'approve'){
+      const html = `<form id="approveForm"><div class="full"><label>Final role<select name="role"><option value="student">Student</option><option value="teacher">Teacher</option></select></label></div><div class="full"><label>Reg No <input name="regNo" placeholder="e.g. 20CS1001"></label></div><div class="full"><label>Department <input name="department" placeholder="CSE"></label></div><div class="full"><label>Semester <input name="semester" type="number" min="1" max="8" value="1"></label></div><div style="grid-column:1/-1; text-align:right; margin-top:8px"><button class="primary" type="submit">Approve & Create Student</button><button id="cancelApprove" type="button" class="ghost">Cancel</button></div></form>`;
+      openModal('Approve user & create student record', html);
+      document.getElementById('cancelApprove').onclick = ()=> modalBackdrop.style.display='none';
+      document.getElementById('approveForm').onsubmit = async (ev)=> {
+        ev.preventDefault();
+        const fd = Object.fromEntries(new FormData(ev.target).entries());
+        const payload = { role: fd.role || 'student', regNo: fd.regNo ? String(fd.regNo).trim() : undefined, department: fd.department ? String(fd.department).trim() : undefined, semester: fd.semester ? Number(fd.semester) : undefined };
+        try {
+          await fetchAPI(`/admin/users/${id}/approve`,'PUT', payload);
+          modalBackdrop.style.display='none'; toast('User approved'); loadPending(); refreshStudents(); refreshCourses();
+        } catch(err){ alert('Approve failed: '+(err.message||err)); }
+      };
+    } else if (act === 'reject') {
+      const reason = prompt('Reason for rejection?') || 'Not approved';
+      try { await fetchAPI(`/admin/users/${id}/reject`,'PUT', { reason }); toast('User rejected'); loadPending(); } catch(e){ alert('Reject failed: '+(e.message||e)); }
+    }
+  });
 
-      // --- Show/hide sections based on role ---
-      // Admin approvals section
-      if (isAdmin) document.getElementById('adminUsers').classList.remove('hidden');
+  // ---------- RESULTS: frontend handlers ----------
+  async function loadResults(){
+    const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+    const uploadsBase = base.replace(/\/api$/,'') + '/uploads';
+    const studentResultsArea = document.getElementById('studentResultsArea');
+    const adminResultArea = document.getElementById('adminResultArea');
 
-      // Student management form only Admin can use (teachers/students see list only)
-      if (!isAdmin) {
-        document.getElementById('studentForm').classList.add('hidden');
+    // reset UI
+    studentResultsArea.style.display = 'none';
+    adminResultArea.style.display = 'none';
+
+    try {
+      if (user.role === 'student') {
+        // show student view
+        studentResultsArea.style.display = 'block';
+        const data = await fetchAPI('/results/mine'); // expects { marks:[], pdf: {...} }
+        const marks = data?.marks || [];
+        const pdf = data?.pdf || null;
+
+        const tbl = document.getElementById('tblInternalMarks');
+        if (!marks.length) {
+          tbl.innerHTML = `<tr><td colspan="2" class="small">No internal marks uploaded</td></tr>`;
+        } else {
+          tbl.innerHTML = marks.map(m => `<tr><td>${m.course?.title || m.course || '-'}</td><td>${m.marks ?? '-'}</td></tr>`).join('');
+        }
+
+        const pdfDiv = document.getElementById('semesterResultPDF');
+        if (pdf && pdf.filePath) {
+          const link = uploadsBase.replace(/\/uploads$/,'') + pdf.filePath; // in case filePath begins with /uploads
+          // safer build:
+          const safeLink = (base.replace(/\/api$/,'') + pdf.filePath);
+          pdfDiv.innerHTML = `<a class="btn-inline" href="${safeLink}" target="_blank">Download your semester result PDF</a>`;
+        } else {
+          pdfDiv.innerHTML = `<div class="small">Semester result not uploaded yet</div>`;
+        }
+      } else if (user.role === 'admin' || user.role === 'teacher') {
+        // show admin/teacher UI for uploading PDFs and setting internal marks (teachers allowed for marks)
+        adminResultArea.style.display = 'block';
+        // load students & courses
+        const students = await fetchAPI('/students');
+        const courses = await fetchAPI('/courses');
+        const studentOptions = (students || []).map(s => `<option value="${s._id}">${s.name} — ${s.regNo||s.email||''}</option>`).join('');
+        const courseOptions = (courses || []).map(c => `<option value="${c._id}">${c.title} — ${c.code || ''}</option>`).join('');
+        document.getElementById('resultStudentList').innerHTML = studentOptions;
+        document.getElementById('internalStudentList').innerHTML = studentOptions;
+        document.getElementById('internalCourseList').innerHTML = courseOptions;
       }
+    } catch (err) {
+      // show errors gently
+      studentResultsArea.style.display = (user.role === 'student') ? 'block' : 'none';
+      adminResultArea.style.display = (user.role !== 'student') ? 'block' : 'none';
+      document.getElementById('tblInternalMarks').innerHTML = `<tr><td colspan="2" class="small">Error: ${err.message}</td></tr>`;
+    }
+  }
 
-      // Course form allowed for Admin + Teacher
-      if (!(isAdmin || isTeacher)) {
-        document.getElementById('courseForm').classList.add('hidden');
-      }
-
-      // Enrollment form allowed for Admin + Teacher
-      if (!(isAdmin || isTeacher)) {
-        document.getElementById('enrollForm').classList.add('hidden');
-      }
-
-      // Notice form hidden for Students (view-only)
-      if (isStudent) {
-        document.getElementById('noticeForm').classList.add('hidden');
-      }
-
-      // --- State ---
-      let STUDENTS = [];
-      let COURSES  = [];
-      let ENROLLS  = [];
-      let NOTICES  = [];
-
-      let editingStudentId = null;
-      let editingCourseId  = null;
-      let editingNoticeId  = null;
-
-      const byId = (id) => document.getElementById(id);
-
-      // ---------- Renderers ----------
-      function renderStudents(list){
-        const el = byId('students'); el.innerHTML = '';
-        list.forEach(s=>{
-          const li = document.createElement('li');
-          li.textContent = `${s._id} | ${s.name} (${s.regNo}) — ${s.department} [Sem ${s.semester}]`;
-
-          const tools = document.createElement('span');
-          tools.className = 'tools';
-
-          if (isAdmin) {
-            const edit = document.createElement('button'); edit.textContent='Edit';
-            edit.onclick = ()=>{
-              editingStudentId = s._id;
-              byId('sRegNo').value = s.regNo;
-              byId('sName').value = s.name;
-              byId('sEmail').value = s.email;
-              byId('sDept').value = s.department;
-              byId('sSem').value  = s.semester;
-              byId('studentSubmit').textContent = 'Save';
-              byId('studentCancel').style.display = 'inline-block';
-            };
-            const del = document.createElement('button'); del.textContent='Delete';
-            del.onclick = async ()=>{ await api(`/students/${s._id}`,'DELETE'); refresh(); };
-            tools.appendChild(edit); tools.appendChild(del);
-          }
-
-          li.appendChild(tools);
-          el.appendChild(li);
-        });
-      }
-
-      function renderCourses(list){
-        const el = byId('courses'); el.innerHTML = '';
-        list.forEach(c=>{
-          const li = document.createElement('li');
-          li.textContent = `${c._id} | ${c.title} [${c.code}] — ${c.department} (${c.credits} cr)`;
-
-          const tools = document.createElement('span');
-          tools.className = 'tools';
-
-          if (isAdmin || isTeacher) {
-            const edit = document.createElement('button'); edit.textContent='Edit';
-            edit.onclick = ()=>{
-              editingCourseId = c._id;
-              byId('cCode').value    = c.code;
-              byId('cTitle').value   = c.title;
-              byId('cCredits').value = c.credits;
-              byId('cDept').value    = c.department;
-              byId('courseSubmit').textContent = 'Save';
-              byId('courseCancel').style.display = 'inline-block';
-            };
-            const del = document.createElement('button'); del.textContent='Delete';
-            del.onclick = async ()=>{ await api(`/courses/${c._id}`,'DELETE'); refresh(); };
-            tools.appendChild(edit); tools.appendChild(del);
-          }
-
-          li.appendChild(tools);
-          el.appendChild(li);
-        });
-      }
-
-      function renderEnrollments(list){
-        const el = byId('enrollments'); el.innerHTML = '';
-        list.forEach(e=>{
-          const li = document.createElement('li');
-          const label = document.createElement('span');
-          label.textContent = `${e.student?.name} → ${e.course?.title} (${e.grade ?? '-'})`;
-          li.appendChild(label);
-
-          if (isAdmin || isTeacher) {
-            const sel = document.createElement('select');
-            ['-','A','B','C','D','E','F'].forEach(g=>{
-              const opt = document.createElement('option');
-              opt.value = g === '-' ? '' : g;
-              opt.textContent = g;
-              if ((e.grade ?? '') === opt.value) opt.selected = true;
-              sel.appendChild(opt);
-            });
-            const save = document.createElement('button'); save.textContent='Update Grade';
-            save.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'PUT',{ grade: sel.value || null }); refresh(); };
-            const del = document.createElement('button'); del.textContent='Delete';
-            del.onclick = async ()=>{ await api(`/enrollments/${e._id}`,'DELETE'); refresh(); };
-
-            li.appendChild(sel); li.appendChild(save); li.appendChild(del);
-          }
-
-          el.appendChild(li);
-        });
-      }
-
-      function renderNotices(list){
-        const el = byId('notices'); el.innerHTML = '';
-        const canManageNotices = (isAdmin || isTeacher);
-
-        list.forEach(n=>{
-          const li = document.createElement('li');
-          const date = new Date(n.publishedAt || n.createdAt).toLocaleString();
-          const label = document.createElement('div');
-          label.innerHTML = `<strong>${n.title}</strong> &nbsp; <em>[${n.audience}]</em><br>${n.body}<br><small class="muted">${date}</small>`;
-          li.appendChild(label);
-
-          if (canManageNotices) {
-            const tools = document.createElement('span');
-            tools.className = 'tools';
-            const edit = document.createElement('button'); edit.textContent='Edit';
-            edit.onclick = ()=>{
-              editingNoticeId = n._id;
-              byId('nTitle').value = n.title;
-              byId('nBody').value  = n.body;
-              byId('nAudience').value = n.audience || 'all';
-              byId('noticeSubmit').textContent = 'Save';
-              byId('noticeCancel').style.display = 'inline-block';
-              window.scrollTo({ top: 0, behavior:'smooth' });
-            };
-            const del = document.createElement('button'); del.textContent='Delete';
-            del.onclick = async ()=>{ await api(`/notices/${n._id}`,'DELETE'); refresh(); };
-            tools.appendChild(edit); tools.appendChild(del);
-            li.appendChild(tools);
-          }
-
-          el.appendChild(li);
-        });
-      }
-
-      function populateEnrollmentSelects(){
-        const sSel = byId('eStudent');
-        const cSel = byId('eCourse');
-        sSel.innerHTML = '<option value="">Select Student</option>' +
-          STUDENTS.map(s => `<option value="${s._id}">${s.name} (${s.regNo})</option>`).join('');
-        cSel.innerHTML = '<option value="">Select Course</option>' +
-          COURSES.map(c => `<option value="${c._id}">${c.title} [${c.code}]</option>`).join('');
-      }
-
-      // ---------- Filters ----------
-      function applyStudentFilter(){
-        const q = byId('sSearch').value.trim().toLowerCase();
-        const data = !q ? STUDENTS : STUDENTS.filter(s =>
-          (s.name||'').toLowerCase().includes(q) ||
-          (s.regNo||'').toLowerCase().includes(q) ||
-          (s.department||'').toLowerCase().includes(q)
-        );
-        renderStudents(data);
-      }
-      function applyCourseFilter(){
-        const q = byId('cSearch').value.trim().toLowerCase();
-        const data = !q ? COURSES : COURSES.filter(c =>
-          (c.title||'').toLowerCase().includes(q) ||
-          (c.code||'').toLowerCase().includes(q) ||
-          (c.department||'').toLowerCase().includes(q)
-        );
-        renderCourses(data);
-      }
-      byId('sSearch').addEventListener('input', applyStudentFilter);
-      byId('cSearch').addEventListener('input', applyCourseFilter);
-
-      // ---------- Forms ----------
-      // Students (Admin only)
-      byId('studentForm').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        if (!isAdmin) return alert('Only admin can modify students.');
-        const payload = {
-          regNo: byId('sRegNo').value.trim(),
-          name:  byId('sName').value.trim(),
-          email: byId('sEmail').value.trim(),
-          department: byId('sDept').value.trim(),
-          semester: Number(byId('sSem').value)
-        };
-        if (editingStudentId) await api(`/students/${editingStudentId}`,'PUT',payload);
-        else await api('/students','POST',payload);
-        clearStudentEdit(); refresh();
+  // Upload result PDF (admin only) - Form submit uses FormData
+  document.getElementById('uploadResultPDF')?.addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    if (! (user.role === 'admin') ) { alert('Only admin can upload semester PDFs'); return; }
+    const form = ev.target;
+    const formData = new FormData(form);
+    const base = (localStorage.getItem('API_BASE') || API_FALLBACK).replace(/\/$/, '');
+    try {
+      const res = await fetch(`${base}/results/upload`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': 'Bearer ' + token } : undefined,
+        body: formData
       });
-      function clearStudentEdit(){
-        editingStudentId = null;
-        byId('studentSubmit').textContent = 'Add';
-        byId('studentCancel').style.display = 'none';
-        byId('studentForm').reset();
-      }
-      byId('studentCancel').onclick = clearStudentEdit;
+      const data = await res.json().catch(()=>null);
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      toast('Semester PDF uploaded');
+      // refresh results so students (when viewing) will see new PDF
+      if (document.querySelector('.navbtn.active')?.dataset?.view === 'results') loadResults();
+    } catch (err) {
+      alert('Upload failed: ' + (err.message || err));
+    }
+  });
 
-      // Courses (Admin + Teacher)
-      byId('courseForm').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        if (!(isAdmin || isTeacher)) return alert('Only admin/teacher can modify courses.');
-        const payload = {
-          code: byId('cCode').value.trim(),
-          title: byId('cTitle').value.trim(),
-          credits: Number(byId('cCredits').value),
-          department: byId('cDept').value.trim()
-        };
-        if (editingCourseId) await api(`/courses/${editingCourseId}`,'PUT',payload);
-        else await api('/courses','POST',payload);
-        clearCourseEdit(); refresh();
-      });
-      function clearCourseEdit(){
-        editingCourseId = null;
-        byId('courseSubmit').textContent = 'Add';
-        byId('courseCancel').style.display = 'none';
-        byId('courseForm').reset();
-      }
-      byId('courseCancel').onclick = clearCourseEdit;
+  // Save internal marks (teacher or admin)
+  document.getElementById('internalMarksForm')?.addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    if (! (user.role === 'admin' || user.role === 'teacher') ) { alert('Only admin/teacher can save marks'); return; }
+    const fd = Object.fromEntries(new FormData(ev.target).entries());
+    // expected payload: { student, course, marks }
+    try {
+      await fetchAPI('/results/internal', 'POST', { student: fd.student, course: fd.course, marks: Number(fd.marks || 0), remarks: fd.remarks || '' });
+      toast('Marks saved');
+    } catch (err) {
+      alert('Save failed: ' + (err.message || err));
+    }
+  });
 
-      // Enroll (Admin + Teacher)
-      byId('enrollForm').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        if (!(isAdmin || isTeacher)) return alert('Only admin/teacher can enroll.');
-        const sid = byId('eStudent').value.trim();
-        const cid = byId('eCourse').value.trim();
-        const isObjectId = /^[a-fA-F0-9]{24}$/;
-        if (!sid || !cid) return alert('Pick both student and course');
-        if (!isObjectId.test(sid) || !isObjectId.test(cid)) return alert('Invalid IDs; refresh and try again.');
-        await api('/enrollments','POST',{ student: sid, course: cid });
-        e.target.reset(); refresh();
-      });
+  // ---------- global search & refresh ----------
+  document.getElementById('btnRefresh').onclick = ()=> { const active = document.querySelector('.navbtn.active').dataset.view; showView(active); toast('Refreshing'); };
+  function debounce(fn, wait=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; }
+  document.getElementById('globalSearch').addEventListener('input', debounce((ev)=>{ const q = ev.target.value.trim().toLowerCase(); const view = document.querySelector('.navbtn.active').dataset.view; if (view === 'students'){ refreshStudents().then(()=> filterTable('#tblStudents', q)); } if (view === 'courses'){ refreshCourses().then(()=> filterTable('#tblCourses', q)); } if (view === 'enrollments'){ refreshEnrollments().then(()=> filterTable('#tblEnrollments', q)); } if (view === 'notices'){ refreshNotices(); } if (view === 'results'){ loadResults(); } },250));
+  function filterTable(selector, q){ if (!q) return; document.querySelectorAll(selector+' tr').forEach(tr=>{ tr.style.display = (tr.textContent.toLowerCase().includes(q)) ? '' : 'none'; }); }
 
-      // Notices (Admin + Teacher)
-      byId('noticeForm').addEventListener('submit', async (e)=>{
-        e.preventDefault();
-        if (isStudent) return alert('Only admin/teacher can publish notices.');
-        const payload = {
-          title: byId('nTitle').value.trim(),
-          body: byId('nBody').value.trim(),
-          audience: byId('nAudience').value
-        };
-        if (!payload.title || !payload.body) return alert('Title and body are required');
-        if (editingNoticeId) await api(`/notices/${editingNoticeId}`,'PUT',payload);
-        else await api('/notices','POST',payload);
-        clearNoticeEdit(); refresh();
-      });
-      function clearNoticeEdit(){
-        editingNoticeId = null;
-        byId('noticeSubmit').textContent = 'Publish';
-        byId('noticeCancel').style.display = 'none';
-        byId('noticeForm').reset();
-      }
-      byId('noticeCancel').onclick = clearNoticeEdit;
+  // init
+  showView('students');
+  refreshStudents();
+  refreshCourses();
+  if (user?.role !== 'student') refreshEnrollments();
+  refreshNotices();
 
-      // ---------- Admin Approval UI ----------
-      async function loadPending() {
-        if (!isAdmin) return;
-        const list = await api('/admin/users?status=pending');
-        const ul = document.getElementById('pendingList');
-        ul.innerHTML = '';
-        list.forEach(u=>{
-          const li = document.createElement('li');
-          li.textContent = `${u.name} | ${u.email} | reqRole=${u.requestedRole} | ID=${u.institutionalId || '-'}`;
-          const tools = document.createElement('span'); tools.className='tools';
-          const approve = document.createElement('button'); approve.textContent='Approve';
-          approve.onclick = async ()=>{ await api(`/admin/users/${u._id}/approve`, 'PUT', {}); loadPending(); };
-          const reject = document.createElement('button'); reject.textContent='Reject';
-          reject.onclick = async ()=>{
-            const reason = prompt('Reason?') || 'Not approved';
-            await api(`/admin/users/${u._id}/reject`, 'PUT', { reason });
-            loadPending();
-          };
-          tools.appendChild(approve); tools.appendChild(reject);
-          li.appendChild(tools);
-          ul.appendChild(li);
-        });
-      }
-      const btnRefreshPending = document.getElementById('refreshPending');
-      if (btnRefreshPending) btnRefreshPending.onclick = loadPending;
-
-      // ---------- Data refresh ----------
-      async function refresh(){
-        const [students, courses, enrollments, notices] = await Promise.all([
-          api('/students'),
-          api('/courses'),
-          api('/enrollments'),
-          api('/notices')
-        ]);
-        STUDENTS = students; COURSES = courses; ENROLLS = enrollments; NOTICES = notices;
-        applyStudentFilter();
-        applyCourseFilter();
-        renderEnrollments(ENROLLS);
-        renderNotices(NOTICES);
-        populateEnrollmentSelects();
-        if (isAdmin) loadPending();
-      }
-
-      // Init
-      refresh();
-    </script>
-  </body>
+  </script>
+</body>
 </html>
