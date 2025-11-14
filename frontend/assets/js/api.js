@@ -1,5 +1,5 @@
 // Base API URL - set in browser console (or default)
-const API_BASE = localStorage.getItem('API_BASE') || 'http://127.0.0.1:4000/api';
+const API_BASE = localStorage.getItem('API_BASE') || 'https://ums-backend-pobu.onrender.com/api';
 
 async function api(path, method='GET', body){
   const token = localStorage.getItem('token');
